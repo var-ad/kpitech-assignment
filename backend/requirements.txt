@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg[binary]
+pydantic
+python-dotenv
+alembic
+pgvector
+numpy
+passlib[bcrypt]
+bcrypt>=4.1,<4.2
+python-jose[cryptography]
+python-multipart
+openai
