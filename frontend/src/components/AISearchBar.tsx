@@ -20,6 +20,7 @@ const accentHover = "#BA2E14";
 const borderColor = "#E5DDD3";
 const textBody = "#5C4F42";
 const textMuted = "#A09080";
+const OFF_TOPIC_NOTE_PREFIX = "I can only help you search the menu";
 
 export default function AISearchBar({ onClear }: { onClear: () => void }) {
   const [query, setQuery] = useState("");
@@ -367,6 +368,12 @@ export default function AISearchBar({ onClear }: { onClear: () => void }) {
         {/* ── Results ── */}
         {results && !loading && (
           <div className="mt-2">
+            {(() => {
+              const isOffTopic =
+                results.items.length === 0 &&
+                Boolean(results.relaxed_note?.includes(OFF_TOPIC_NOTE_PREFIX));
+              return (
+                <>
             {/* Relaxed filter note - left-accent card */}
             {results.relaxed_filters && results.relaxed_note && (
               <div
@@ -388,7 +395,66 @@ export default function AISearchBar({ onClear }: { onClear: () => void }) {
 
             {/* No results */}
             {results.items.length === 0 ? (
-              <div className="text-center" style={{ padding: "48px 16px" }}>
+              isOffTopic ? (
+                <div
+                  className="text-center"
+                  style={{
+                    padding: "42px 18px",
+                    backgroundColor: "#FAF8F5",
+                    borderRadius: "12px",
+                    border: "1.5px solid #E5DDD3",
+                  }}
+                >
+                  <div style={{ fontSize: "2.25rem", marginBottom: "12px" }}>
+                    🍽️
+                  </div>
+                  <p
+                    style={{
+                      color: textBody,
+                      fontSize: "1.05rem",
+                      fontWeight: 600,
+                      marginBottom: "8px",
+                      fontFamily: "Sora, sans-serif",
+                    }}
+                  >
+                    Menu searches only
+                  </p>
+                  <p
+                    style={{
+                      color: textMuted,
+                      fontSize: "0.92rem",
+                      margin: "0 auto 18px",
+                      maxWidth: "440px",
+                      lineHeight: 1.5,
+                      fontFamily: "DM Sans, sans-serif",
+                    }}
+                  >
+                    {results.relaxed_note}
+                  </p>
+                  <div className="flex flex-wrap gap-2 justify-center">
+                    {["spicy vegetarian under 200", "light lunch"].map((chip) => (
+                      <button
+                        key={chip}
+                        onClick={() => handleChipClick(chip)}
+                        style={{
+                          padding: "7px 14px",
+                          border: "1.5px solid",
+                          borderColor,
+                          borderRadius: "8px",
+                          backgroundColor: "#FFFFFF",
+                          color: textBody,
+                          fontSize: "0.84rem",
+                          cursor: "pointer",
+                          fontFamily: "DM Sans, sans-serif",
+                        }}
+                      >
+                        {chip}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center" style={{ padding: "48px 16px" }}>
                 <div style={{ fontSize: "2.5rem", marginBottom: "12px" }}>
                   🤔
                 </div>
@@ -438,6 +504,7 @@ export default function AISearchBar({ onClear }: { onClear: () => void }) {
                   Browse all items
                 </button>
               </div>
+              )
             ) : (
               <>
                 {/* Result count */}
@@ -527,6 +594,9 @@ export default function AISearchBar({ onClear }: { onClear: () => void }) {
                   )}
               </>
             )}
+                </>
+              );
+            })()}
           </div>
         )}
       </div>

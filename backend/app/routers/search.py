@@ -28,6 +28,10 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
 _openai_client: OpenAI | None = None
 MAX_RESULTS = 15
+OFF_TOPIC_SEARCH_MESSAGE = (
+    "I can only help you search the menu - try something like "
+    "'spicy vegetarian under 200' or 'light lunch'."
+)
 
 
 def _client() -> OpenAI | None:
@@ -53,6 +57,14 @@ async def search(body: SearchRequest, db: Session = Depends(get_db)):
     logger.info("search: parsed -> %s", {
         k: v for k, v in parsed.items() if v not in (None, [], "")
     })
+
+    if parsed.get("is_food_related") is False:
+        logger.info("search: off-topic query rejected before filtering: %r", body.query)
+        return SearchResponse(
+            items=[],
+            relaxed_filters=False,
+            relaxed_note=OFF_TOPIC_SEARCH_MESSAGE,
+        )
 
     max_price = parsed.get("max_price")
     min_price = parsed.get("min_price")
@@ -145,7 +157,11 @@ async def search(body: SearchRequest, db: Session = Depends(get_db)):
     # ── 6. Absolute fallback: full menu, ranked by LLM ─────
     if not results:
         relaxed = True
-        logger.info("search: absolute fallback - ranking full menu")
+        logger.info(
+            "search: absolute fallback - ranking full menu query=%r parsed=%s",
+            body.query,
+            {k: v for k, v in parsed.items() if v not in (None, [], "")},
+        )
         results = base.all()
 
     # ── 7. Build relaxed_note ──────────────────────────────
@@ -171,7 +187,14 @@ async def search(body: SearchRequest, db: Session = Depends(get_db)):
 
     if ranked is not None and len(ranked) == 0 and relaxed:
         # LLM scored everything below threshold - fall back to unranked top results
-        logger.info("search: LLM ranked empty - fallback to unranked top %d", MAX_RESULTS)
+        logger.warning(
+            "search: relaxed query ranked empty - fallback to unranked top %d "
+            "query=%r candidates=%d parsed=%s",
+            MAX_RESULTS,
+            body.query,
+            len(results),
+            {k: v for k, v in parsed.items() if v not in (None, [], "")},
+        )
         ranked = None
 
     if ranked is not None:
@@ -190,6 +213,14 @@ async def search(body: SearchRequest, db: Session = Depends(get_db)):
             for score, item in ranked[:MAX_RESULTS]
         ]
     else:
+        if relaxed and results:
+            logger.warning(
+                "search: relaxed unscored fallback returned menu items "
+                "query=%r count=%d parsed=%s",
+                body.query,
+                min(len(results), MAX_RESULTS),
+                {k: v for k, v in parsed.items() if v not in (None, [], "")},
+            )
         items = [
             SearchItem(
                 id=item.id,

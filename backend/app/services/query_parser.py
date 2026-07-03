@@ -49,19 +49,21 @@ def _llm_parse(query: str) -> dict[str, Any] | None:
 
     examples = [
         ('"a light lunch not fried"',
-         '{"max_price":null,"min_price":null,"is_vegetarian":null,"is_spicy":null,"cooking_method_include":[],"cooking_method_exclude":["fried"],"category_hint":null,"semantic_description":"light lunch"}'),
+         '{"is_food_related":true,"max_price":null,"min_price":null,"is_vegetarian":null,"is_spicy":null,"cooking_method_include":[],"cooking_method_exclude":["fried"],"category_hint":null,"semantic_description":"light lunch"}'),
         ('"spicy veg noodles under 200"',
-         '{"max_price":200,"min_price":null,"is_vegetarian":true,"is_spicy":true,"cooking_method_include":[],"cooking_method_exclude":[],"category_hint":"Rice","semantic_description":"noodles"}'),
+         '{"is_food_related":true,"max_price":200,"min_price":null,"is_vegetarian":true,"is_spicy":true,"cooking_method_include":[],"cooking_method_exclude":[],"category_hint":"Rice","semantic_description":"noodles"}'),
         ('"something sweet"',
-         '{"max_price":null,"min_price":null,"is_vegetarian":null,"is_spicy":null,"cooking_method_include":[],"cooking_method_exclude":[],"category_hint":"Dessert","semantic_description":"sweet"}'),
+         '{"is_food_related":true,"max_price":null,"min_price":null,"is_vegetarian":null,"is_spicy":null,"cooking_method_include":[],"cooking_method_exclude":[],"category_hint":"Dessert","semantic_description":"sweet"}'),
         ('"hot beverage"',
-         '{"max_price":null,"min_price":null,"is_vegetarian":null,"is_spicy":null,"cooking_method_include":[],"cooking_method_exclude":[],"category_hint":"Beverages","semantic_description":"hot drink"}'),
+         '{"is_food_related":true,"max_price":null,"min_price":null,"is_vegetarian":null,"is_spicy":null,"cooking_method_include":[],"cooking_method_exclude":[],"category_hint":"Beverages","semantic_description":"hot drink"}'),
         ('"something to drink"',
-         '{"max_price":null,"min_price":null,"is_vegetarian":null,"is_spicy":null,"cooking_method_include":[],"cooking_method_exclude":[],"category_hint":"Beverages","semantic_description":"drink"}'),
+         '{"is_food_related":true,"max_price":null,"min_price":null,"is_vegetarian":null,"is_spicy":null,"cooking_method_include":[],"cooking_method_exclude":[],"category_hint":"Beverages","semantic_description":"drink"}'),
         ('"spicy vegetarian starter under 200"',
-         '{"max_price":200,"min_price":null,"is_vegetarian":true,"is_spicy":true,"cooking_method_include":[],"cooking_method_exclude":[],"category_hint":"Starters","semantic_description":"spicy vegetarian starter"}'),
+         '{"is_food_related":true,"max_price":200,"min_price":null,"is_vegetarian":true,"is_spicy":true,"cooking_method_include":[],"cooking_method_exclude":[],"category_hint":"Starters","semantic_description":"spicy vegetarian starter"}'),
         ('"grilled chicken"',
-         '{"max_price":null,"min_price":null,"is_vegetarian":false,"is_spicy":null,"cooking_method_include":["grilled"],"cooking_method_exclude":[],"category_hint":null,"semantic_description":"grilled chicken"}'),
+         '{"is_food_related":true,"max_price":null,"min_price":null,"is_vegetarian":false,"is_spicy":null,"cooking_method_include":["grilled"],"cooking_method_exclude":[],"category_hint":null,"semantic_description":"grilled chicken"}'),
+        ('"what is today\'s weather?"',
+         '{"is_food_related":false,"max_price":null,"min_price":null,"is_vegetarian":null,"is_spicy":null,"cooking_method_include":[],"cooking_method_exclude":[],"category_hint":null,"semantic_description":""}'),
     ]
     example_lines = "\n".join("  %s -> %s" % (q, j) for q, j in examples)
 
@@ -73,6 +75,7 @@ Query: "%s"
 
 Return ONLY valid JSON - no markdown, no explanation. Keys:
 
+- is_food_related: boolean
 - max_price: integer or null
 - min_price: integer or null
 - is_vegetarian: true / false / null
@@ -83,6 +86,7 @@ Return ONLY valid JSON - no markdown, no explanation. Keys:
 - semantic_description: a short phrase (max 8 words) capturing the fuzzy food intent. Keep descriptive/subjective words like "light", "healthy", "hearty", "comfort", "spicy", "sweet", "tangy" - these help the ranking step. Never empty.
 
 Rules:
+- If the query is not about food, menu items, or ordering (e.g. weather, greetings, random text, general questions unrelated to a restaurant menu), set is_food_related to false and leave other fields null/empty.
 - "not fried" / "without frying" -> cooking_method_exclude: ["fried"]
 - "steamed", "grilled", "baked", "roasted" as a positive ask -> cooking_method_include: ["method"]
 - "not spicy" / "mild" -> is_spicy: false
@@ -108,6 +112,7 @@ Examples:
         parsed = json.loads(text)
 
         result: dict[str, Any] = {}
+        result["is_food_related"] = bool(parsed.get("is_food_related", True))
         result["max_price"] = int(parsed["max_price"]) if parsed.get("max_price") is not None else None
         result["min_price"] = int(parsed["min_price"]) if parsed.get("min_price") is not None else None
         result["is_vegetarian"] = (
@@ -120,6 +125,19 @@ Examples:
         result["cooking_method_exclude"] = parsed.get("cooking_method_exclude") or []
         result["category_hint"] = parsed.get("category_hint") or None
         result["semantic_description"] = str(parsed.get("semantic_description") or query)
+        if result["is_food_related"] is False:
+            result.update(
+                {
+                    "max_price": None,
+                    "min_price": None,
+                    "is_vegetarian": None,
+                    "is_spicy": None,
+                    "cooking_method_include": [],
+                    "cooking_method_exclude": [],
+                    "category_hint": None,
+                    "semantic_description": "",
+                }
+            )
         return result
     except Exception as e:
         logger.warning("LLM query parse failed: %s", e)
@@ -155,6 +173,30 @@ for kw_list, cat in _CATEGORY_SYNONYMS:
     for kw in kw_list:
         if kw not in _CAT_KEYWORD_MAP:
             _CAT_KEYWORD_MAP[kw] = cat
+
+_FOOD_SIGNAL_WORDS = {
+    "food", "menu", "item", "dish", "dishes", "order", "eat", "hungry",
+    "craving", "meal", "lunch", "dinner", "breakfast", "snack", "starter",
+    "dessert", "drink", "beverage", "sweet", "tangy", "hearty", "comfort",
+    "nice", "surprise", "recommend", "recommendation", "restaurant",
+    "kitchen", "special", "specials", "cheap", "costly", "expensive",
+}
+_FOOD_SIGNAL_WORDS.update(_CAT_KEYWORD_MAP.keys())
+
+_NON_FOOD_PATTERNS = [
+    r"\b(weather|temperature|forecast|rain|raining|sunny|cloudy)\b",
+    r"\b(hello|hi|hey|good morning|good afternoon|good evening)\b",
+    r"\b(joke|jokes|story|poem|song|news|sports|stock|stocks)\b",
+    r"\b(who|what|when|where|why|how|tell me|explain|define)\b",
+]
+
+
+def _looks_like_random_text(q: str) -> bool:
+    compact = re.sub(r"[^a-z]", "", q)
+    if len(compact) < 5 or " " in q.strip():
+        return False
+    vowels = sum(1 for ch in compact if ch in "aeiou")
+    return vowels / len(compact) < 0.25
 
 
 def _keyword_parse(query: str) -> dict[str, Any]:
@@ -227,7 +269,33 @@ def _keyword_parse(query: str) -> dict[str, Any]:
     if not desc or len(desc) < 2:
         desc = q
 
+    filters_extracted = any(
+        [
+            max_price is not None,
+            min_price is not None,
+            is_vegetarian is not None,
+            is_spicy is not None,
+            bool(cooking_method_include),
+            bool(cooking_method_exclude),
+            category_hint is not None,
+        ]
+    )
+    has_food_signal = any(
+        re.search(rf"\b{re.escape(word)}\b", q) for word in _FOOD_SIGNAL_WORDS
+    )
+    has_non_food_pattern = any(re.search(pattern, q) for pattern in _NON_FOOD_PATTERNS)
+    desc_is_originalish = desc == q or len(desc) >= max(3, int(len(q) * 0.75))
+    is_food_related = True
+    if (
+        not filters_extracted
+        and not has_food_signal
+        and desc_is_originalish
+        and (has_non_food_pattern or _looks_like_random_text(q))
+    ):
+        is_food_related = False
+
     return {
+        "is_food_related": is_food_related,
         "max_price": max_price,
         "min_price": min_price,
         "is_vegetarian": is_vegetarian,
@@ -244,8 +312,8 @@ def parse_query(query: str) -> dict[str, Any]:
     if result is None:
         logger.info("LLM parser unavailable - using keyword fallback for %r", query)
         result = _keyword_parse(query)
-    logger.info("parse_query(%r) -> meal_type=%r category_hint=%r cm_inc=%r cm_exc=%r sem=%r",
-                query, result.get("meal_type"), result.get("category_hint"),
+    logger.info("parse_query(%r) -> food=%r category_hint=%r cm_inc=%r cm_exc=%r sem=%r",
+                query, result.get("is_food_related"), result.get("category_hint"),
                 result.get("cooking_method_include"), result.get("cooking_method_exclude"),
                 result.get("semantic_description"))
     return result
