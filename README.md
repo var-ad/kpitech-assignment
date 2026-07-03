@@ -9,7 +9,6 @@ metrics.
 ## Current Features
 
 - Customer menu browsing at `/`
-- Legacy `/customer` route redirects to `/`
 - Admin panel at `/admin`
 - Admin JWT login
 - Menu item CRUD with soft delete
@@ -176,47 +175,47 @@ do not change historical order totals.
 
 ### Auth
 
-| Method | Path | Auth | Notes |
-| --- | --- | --- | --- |
-| POST | `/api/auth/register` | No | Backend-only customer registration endpoint; no signup UI |
-| POST | `/api/auth/login` | No | Returns JWT access token |
-| GET | `/api/auth/me` | JWT | Current user |
+| Method | Path                 | Auth | Notes                                                     |
+| ------ | -------------------- | ---- | --------------------------------------------------------- |
+| POST   | `/api/auth/register` | No   | Backend-only customer registration endpoint; no signup UI |
+| POST   | `/api/auth/login`    | No   | Returns JWT access token                                  |
+| GET    | `/api/auth/me`       | JWT  | Current user                                              |
 
 ### Customer Menu
 
-| Method | Path | Auth | Notes |
-| --- | --- | --- | --- |
-| GET | `/api/menu` | No | Available, non-deleted menu items |
-| GET | `/api/menu/categories` | No | Distinct available categories |
-| GET | `/api/menu/specials` | No | Available items marked as today's special |
-| GET | `/api/menu/{item_id}` | No | Available item detail |
+| Method | Path                   | Auth | Notes                                     |
+| ------ | ---------------------- | ---- | ----------------------------------------- |
+| GET    | `/api/menu`            | No   | Available, non-deleted menu items         |
+| GET    | `/api/menu/categories` | No   | Distinct available categories             |
+| GET    | `/api/menu/specials`   | No   | Available items marked as today's special |
+| GET    | `/api/menu/{item_id}`  | No   | Available item detail                     |
 
 ### Admin Menu
 
-| Method | Path | Auth | Notes |
-| --- | --- | --- | --- |
-| GET | `/api/admin/menu-items` | Admin | List non-deleted menu items |
-| POST | `/api/admin/menu-items` | Admin | Create menu item |
-| GET | `/api/admin/menu-items/{item_id}` | Admin | Single item, including unavailable/soft-deleted |
-| PUT | `/api/admin/menu-items/{item_id}` | Admin | Update menu item |
-| PATCH | `/api/admin/menu-items/{item_id}/availability` | Admin | Toggle availability |
-| PATCH | `/api/admin/menu-items/{item_id}/special` | Admin | Toggle today's special |
-| DELETE | `/api/admin/menu-items/{item_id}` | Admin | Soft delete |
+| Method | Path                                           | Auth  | Notes                                           |
+| ------ | ---------------------------------------------- | ----- | ----------------------------------------------- |
+| GET    | `/api/admin/menu-items`                        | Admin | List non-deleted menu items                     |
+| POST   | `/api/admin/menu-items`                        | Admin | Create menu item                                |
+| GET    | `/api/admin/menu-items/{item_id}`              | Admin | Single item, including unavailable/soft-deleted |
+| PUT    | `/api/admin/menu-items/{item_id}`              | Admin | Update menu item                                |
+| PATCH  | `/api/admin/menu-items/{item_id}/availability` | Admin | Toggle availability                             |
+| PATCH  | `/api/admin/menu-items/{item_id}/special`      | Admin | Toggle today's special                          |
+| DELETE | `/api/admin/menu-items/{item_id}`              | Admin | Soft delete                                     |
 
 ### Orders
 
-| Method | Path | Auth | Notes |
-| --- | --- | --- | --- |
-| POST | `/api/orders` | No | Place guest order |
-| GET | `/api/orders/{order_id}` | No | Track order |
-| GET | `/api/admin/orders` | Admin | List orders, optional `?status=` |
-| PATCH | `/api/admin/orders/{order_id}/status` | Admin | Advance status one step |
+| Method | Path                                  | Auth  | Notes                            |
+| ------ | ------------------------------------- | ----- | -------------------------------- |
+| POST   | `/api/orders`                         | No    | Place guest order                |
+| GET    | `/api/orders/{order_id}`              | No    | Track order                      |
+| GET    | `/api/admin/orders`                   | Admin | List orders, optional `?status=` |
+| PATCH  | `/api/admin/orders/{order_id}/status` | Admin | Advance status one step          |
 
 ### Search
 
-| Method | Path | Auth | Notes |
-| --- | --- | --- | --- |
-| POST | `/api/menu/search` | No | Natural-language smart search |
+| Method | Path               | Auth | Notes                         |
+| ------ | ------------------ | ---- | ----------------------------- |
+| POST   | `/api/menu/search` | No   | Natural-language smart search |
 
 Body:
 
@@ -230,9 +229,9 @@ Search returns up to 15 available items, each with an optional relevance score.
 
 ### Dashboard
 
-| Method | Path | Auth | Notes |
-| --- | --- | --- | --- |
-| GET | `/api/admin/dashboard` | Admin | Today's revenue, orders by status, popular items |
+| Method | Path                   | Auth  | Notes                                            |
+| ------ | ---------------------- | ----- | ------------------------------------------------ |
+| GET    | `/api/admin/dashboard` | Admin | Today's revenue, orders by status, popular items |
 
 ## AI Search Behavior
 
@@ -293,12 +292,3 @@ npm run lint
 cd ..
 python -m compileall backend\app
 ```
-
-## Notes
-
-- No customer login is required.
-- No signup UI is exposed.
-- `/api/auth/register` remains available in the backend but is intentionally not
-  part of the current frontend flow.
-- Menu deletes are soft deletes to preserve order history.
-- Restart the backend after changing search/parser code.
