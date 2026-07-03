@@ -24,7 +24,7 @@ def seed_admin():
     with Session(engine) as session:
         existing = session.query(User).filter(User.email == ADMIN_EMAIL).first()
         if existing:
-            print(f"Admin '{ADMIN_EMAIL}' already exists — skipping")
+            print(f"Admin '{ADMIN_EMAIL}' already exists - skipping")
             return
 
         admin = User(

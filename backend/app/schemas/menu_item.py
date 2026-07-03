@@ -45,6 +45,10 @@ class MenuItemAvailabilityUpdate(BaseModel):
     available: bool
 
 
+class MenuItemSpecialUpdate(BaseModel):
+    is_special: bool
+
+
 class MenuItemRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -56,6 +60,7 @@ class MenuItemRead(BaseModel):
     is_vegetarian: bool
     is_spicy: bool
     available: bool
+    is_special: bool
     cooking_method: CookingMethod
     created_at: datetime.datetime
     updated_at: datetime.datetime

@@ -1,4 +1,4 @@
-"""AI search endpoint — parses, filters, ranks, and returns menu search results.
+"""AI search endpoint - parses, filters, ranks, and returns menu search results.
 
 Pipeline:  query_parser.parse_query → hard SQL filters → category_hint filter
          → cascade relax → LLM rank → score threshold → return top 15
@@ -145,7 +145,7 @@ async def search(body: SearchRequest, db: Session = Depends(get_db)):
     # ── 6. Absolute fallback: full menu, ranked by LLM ─────
     if not results:
         relaxed = True
-        logger.info("search: absolute fallback — ranking full menu")
+        logger.info("search: absolute fallback - ranking full menu")
         results = base.all()
 
     # ── 7. Build relaxed_note ──────────────────────────────
@@ -156,7 +156,7 @@ async def search(body: SearchRequest, db: Session = Depends(get_db)):
         elif parts:
             relaxed_note = ". ".join(parts) + ". Showing closest matches below."
         else:
-            relaxed_note = "No exact matches found — showing closest overall matches below."
+            relaxed_note = "No exact matches found - showing closest overall matches below."
 
     # ── 8. LLM ranking ─────────────────────────────────────
     cl = _client()
@@ -170,8 +170,8 @@ async def search(body: SearchRequest, db: Session = Depends(get_db)):
     )
 
     if ranked is not None and len(ranked) == 0 and relaxed:
-        # LLM scored everything below threshold — fall back to unranked top results
-        logger.info("search: LLM ranked empty — fallback to unranked top %d", MAX_RESULTS)
+        # LLM scored everything below threshold - fall back to unranked top results
+        logger.info("search: LLM ranked empty - fallback to unranked top %d", MAX_RESULTS)
         ranked = None
 
     if ranked is not None:

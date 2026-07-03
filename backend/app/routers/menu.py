@@ -12,6 +12,7 @@ from app.schemas.menu_item import (
     MenuItemAvailabilityUpdate,
     MenuItemCreate,
     MenuItemRead,
+    MenuItemSpecialUpdate,
     MenuItemUpdate,
 )
 
@@ -19,7 +20,7 @@ router = APIRouter(dependencies=[Depends(get_current_admin)])
 
 
 def _get_menu_item_or_404(db: Session, item_id: int) -> MenuItem:
-    """Look up by ID — allows soft-deleted items so admin can inspect order history."""
+    """Look up by ID - allows soft-deleted items so admin can inspect order history."""
     item = db.query(MenuItem).filter(MenuItem.id == item_id).first()
     if not item:
         raise HTTPException(
@@ -121,6 +122,40 @@ async def toggle_availability(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update availability",
+        )
+    return item
+
+
+@router.patch("/{item_id}/special", response_model=MenuItemRead)
+async def toggle_special(
+    item_id: int,
+    body: MenuItemSpecialUpdate,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    item = _get_menu_item_or_404(db, item_id)
+
+    if body.is_special:
+        count = db.query(MenuItem).filter(
+            MenuItem.is_special == True,
+            MenuItem.available == True,
+            MenuItem.deleted_at.is_(None),
+        ).count()
+        if count >= 5:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Maximum 5 special items allowed. Remove one before adding another.",
+            )
+
+    item.is_special = body.is_special
+    try:
+        db.commit()
+        db.refresh(item)
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to update special status",
         )
     return item
 

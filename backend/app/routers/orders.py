@@ -153,7 +153,7 @@ async def update_order_status(
 
     if new_idx != current_idx + 1:
         if current_idx == len(STATUS_SEQUENCE) - 1:
-            msg = f"Order is already at final status '{order.status.value}' — cannot advance further"
+            msg = f"Order is already at final status '{order.status.value}' - cannot advance further"
         else:
             msg = (
                 f"Cannot move from '{order.status.value}' to '{body.status.value}' directly. "

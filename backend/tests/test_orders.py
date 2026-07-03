@@ -83,7 +83,7 @@ def test_status_transition_at_final_status(client, db, admin_headers, placed_ord
                             headers=admin_headers, json={"status": s})
         assert resp.status_code == 200
 
-    # Now at picked_up — try to advance further
+    # Now at picked_up - try to advance further
     resp = client.patch(f"/api/admin/orders/{placed_order.id}/status",
                         headers=admin_headers, json={"status": "placed"})
     assert resp.status_code == 400

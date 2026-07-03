@@ -1,4 +1,4 @@
-"""Test configuration — SQLite in-memory, dependency overrides, fixtures.
+"""Test configuration - SQLite in-memory, dependency overrides, fixtures.
 
 Uses SQLite in-memory so tests are fully isolated and require no external DB.
 Enum columns degrade to VARCHAR automatically. The pgvector import gracefully

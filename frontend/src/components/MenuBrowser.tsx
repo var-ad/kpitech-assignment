@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import apiClient from '../api/client'
 import MenuItemCard, { type MenuItemData } from './MenuItemCard'
+import TodaysSpecial from './TodaysSpecial'
 
 export default function MenuBrowser() {
   const [items, setItems] = useState<MenuItemData[]>([])
@@ -100,6 +101,9 @@ export default function MenuBrowser() {
           </button>
         ))}
       </div>
+
+      {/* Today's Special banner (hidden when no specials set) */}
+      <TodaysSpecial />
 
       {/* Items grid */}
       {filtered.length === 0 ? (

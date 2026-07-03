@@ -47,6 +47,19 @@ async def list_categories(
     return [row[0] for row in result.all()]
 
 
+@router.get("/specials", response_model=list[MenuItemRead])
+async def get_specials(
+    db: Session = Depends(get_db),
+):
+    query = select(MenuItem).where(
+        MenuItem.is_special == True,
+        MenuItem.available == True,
+        MenuItem.deleted_at.is_(None),
+    ).order_by(MenuItem.updated_at.desc())
+    result = db.execute(query)
+    return result.scalars().all()
+
+
 @router.get("/{item_id}", response_model=MenuItemRead)
 async def get_available_item(
     item_id: int,

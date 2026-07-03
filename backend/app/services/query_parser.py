@@ -1,4 +1,4 @@
-"""Natural language query parser — LLM primary, regex keyword fallback.
+"""Natural language query parser - LLM primary, regex keyword fallback.
 
 Extracts structured filters + category_hint + semantic_description from a
 free-text food search query.
@@ -30,7 +30,7 @@ def _get_llm_client() -> OpenAI | None:
     return _openai_client
 
 
-# Known menu categories — passed into the LLM prompt so category_hint maps to
+# Known menu categories - passed into the LLM prompt so category_hint maps to
 # something real. Extend this list if new categories are added to the menu.
 # Must match the actual category strings in the database exactly.
 # Use SELECT DISTINCT category FROM menu_items to verify.
@@ -71,16 +71,16 @@ The menu has these EXACT categories: [%s]
 
 Query: "%s"
 
-Return ONLY valid JSON — no markdown, no explanation. Keys:
+Return ONLY valid JSON - no markdown, no explanation. Keys:
 
 - max_price: integer or null
 - min_price: integer or null
 - is_vegetarian: true / false / null
 - is_spicy: true / false / null
-- cooking_method_include: list of strings — cooking methods the user wants (valid: fried, steamed, boiled, grilled, baked, roasted, tandoori, sauteed, raw). [] if none.
-- cooking_method_exclude: list of strings — cooking methods the user wants to exclude. "not fried" -> ["fried"]. [] if none.
-- category_hint: string or null — which category the user seems to want. Map synonyms to the closest real menu category from the list above. Examples: "drinks"/"beverage" -> "Beverages", "sweets"/"dessert" -> "Desserts", "starters"/"appetizers"/"snack" -> "Starters", "soup" -> "Soups", "bread"/"naan"/"roti" -> "Breads", "rice"/"biryani" -> "Rice & Biryani", "breakfast"/"dosa"/"idli" -> "South Indian", "curry"/"gravy"/"meal" -> "Main Course". Only set this if you can confidently map to one of the EXACT category strings above. null if not clear.
-- semantic_description: a short phrase (max 8 words) capturing the fuzzy food intent. Keep descriptive/subjective words like "light", "healthy", "hearty", "comfort", "spicy", "sweet", "tangy" — these help the ranking step. Never empty.
+- cooking_method_include: list of strings - cooking methods the user wants (valid: fried, steamed, boiled, grilled, baked, roasted, tandoori, sauteed, raw). [] if none.
+- cooking_method_exclude: list of strings - cooking methods the user wants to exclude. "not fried" -> ["fried"]. [] if none.
+- category_hint: string or null - which category the user seems to want. Map synonyms to the closest real menu category from the list above. Examples: "drinks"/"beverage" -> "Beverages", "sweets"/"dessert" -> "Desserts", "starters"/"appetizers"/"snack" -> "Starters", "soup" -> "Soups", "bread"/"naan"/"roti" -> "Breads", "rice"/"biryani" -> "Rice & Biryani", "breakfast"/"dosa"/"idli" -> "South Indian", "curry"/"gravy"/"meal" -> "Main Course". Only set this if you can confidently map to one of the EXACT category strings above. null if not clear.
+- semantic_description: a short phrase (max 8 words) capturing the fuzzy food intent. Keep descriptive/subjective words like "light", "healthy", "hearty", "comfort", "spicy", "sweet", "tangy" - these help the ranking step. Never empty.
 
 Rules:
 - "not fried" / "without frying" -> cooking_method_exclude: ["fried"]
@@ -88,7 +88,7 @@ Rules:
 - "not spicy" / "mild" -> is_spicy: false
 - "vegetarian" / "veg" -> is_vegetarian: true
 - "non veg" / "meat" -> is_vegetarian: false
-- "hot" in beverage/drink context is a temperature word, NOT spicy — don't set is_spicy: true for "hot drinks"/"hot beverage"
+- "hot" in beverage/drink context is a temperature word, NOT spicy - don't set is_spicy: true for "hot drinks"/"hot beverage"
 
 Examples:
 %s""" % (cats, query, example_lines)
@@ -145,7 +145,7 @@ _CATEGORY_SYNONYMS: list[tuple[list[str], str]] = [
       "mutton", "fish", "paneer", "dal", "subzi"], "Main Course"),
 ]
 # ponytail: meal-time words ("lunch", "dinner", "breakfast") deliberately
-# excluded from category_hint mappings — they flow through semantic_description
+# excluded from category_hint mappings - they flow through semantic_description
 # to the LLM ranking step instead, which handles contextual appropriateness.
 # "breakfast" items (idli, dosa) are already covered by "South Indian".
 
@@ -242,7 +242,7 @@ def _keyword_parse(query: str) -> dict[str, Any]:
 def parse_query(query: str) -> dict[str, Any]:
     result = _llm_parse(query)
     if result is None:
-        logger.info("LLM parser unavailable — using keyword fallback for %r", query)
+        logger.info("LLM parser unavailable - using keyword fallback for %r", query)
         result = _keyword_parse(query)
     logger.info("parse_query(%r) -> meal_type=%r category_hint=%r cm_inc=%r cm_exc=%r sem=%r",
                 query, result.get("meal_type"), result.get("category_hint"),

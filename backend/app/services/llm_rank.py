@@ -17,22 +17,22 @@ Search query: "{query}"
 Food intent: "{semantic_description}"
 Category hint: {category_hint}
 
-Each item below has an id, name, description, and category. Return a JSON array containing EVERY item, each with "id" (integer) and "score" (float 0.0–1.0). Order matters — most relevant first.
+Each item below has an id, name, description, and category. Return a JSON array containing EVERY item, each with "id" (integer) and "score" (float 0.0–1.0). Order matters - most relevant first.
 
 Items:
 {items_str}
 
 Rules:
 - If the category hint is set, items OUTSIDE that category should score below 0.15 unless their name/description literally contains a synonym for that category.
-- "hot" in a beverage/drink context means warm drink, not spicy — cold beverages can still score high for "hot drink" queries if they match the beverage intent.
+- "hot" in a beverage/drink context means warm drink, not spicy - cold beverages can still score high for "hot drink" queries if they match the beverage intent.
 - Words like "light", "healthy", "low calorie", or "diet" in the food intent are STRONG negative signals against items whose name or description mentions: butter, cream, creamy, cheese, ghee, rich gravy, deep-fried, crispy, slow-cooked, heavy preparation. These items should score below 0.20 regardless of other word matches.
 - Conversely, items described as steamed, grilled, soup, salad, clear broth, fresh, or herb-based should score HIGHER for "light"/"healthy" queries (> 0.60).
-- Words like "lunch" or "dinner" in the food intent are time-of-day hints, NOT category filters — don't force a specific category, but prefer items typically eaten at that meal. Heavier items (biryani, butter chicken, rich curries) should rank lower for "lunch" than lighter options.
-- "hearty", "filling", "rich", "heavy" in the food intent should boost items with butter, cream, gravy, cheese, biryani, rich curries — the opposite of "light".
+- Words like "lunch" or "dinner" in the food intent are time-of-day hints, NOT category filters - don't force a specific category, but prefer items typically eaten at that meal. Heavier items (biryani, butter chicken, rich curries) should rank lower for "lunch" than lighter options.
+- "hearty", "filling", "rich", "heavy" in the food intent should boost items with butter, cream, gravy, cheese, biryani, rich curries - the opposite of "light".
 - Multiple rounds of scoring: first filter by category hint (if present), then by the food intent words, then adjust for meal-time appropriateness.
 - A score of 0.0 means "completely irrelevant".
 
-Return ONLY the JSON array — no markdown, no explanation."""
+Return ONLY the JSON array - no markdown, no explanation."""
 
 
 def rank_candidates(
@@ -54,14 +54,14 @@ def rank_candidates(
         return [(0.5, candidates[0])]
 
     if client is None:
-        logger.warning("LLM client unavailable — skipping ranking")
+        logger.warning("LLM client unavailable - skipping ranking")
         return None
 
     shortlist = candidates[:_CANDIDATE_CAP]
     lines = []
     for item in shortlist:
         desc = (item.description or "")[:100]
-        lines.append(f"  {item.id}: {item.name} — {desc} — category: {item.category}")
+        lines.append(f"  {item.id}: {item.name} - {desc} - category: {item.category}")
     items_str = "\n".join(lines)
 
     prompt = _PROMPT.format(
@@ -104,11 +104,11 @@ def rank_candidates(
         missing = len(shortlist) - len(seen)
         if missing > 0:
             logger.warning(
-                "LLM ranking omitted %d/%d candidates — excluded from results",
+                "LLM ranking omitted %d/%d candidates - excluded from results",
                 missing, len(shortlist),
             )
 
         return ranked
     except Exception as e:
-        logger.warning("LLM ranking failed: %s — falling back to unranked", e)
+        logger.warning("LLM ranking failed: %s - falling back to unranked", e)
         return None

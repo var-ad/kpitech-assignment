@@ -34,6 +34,7 @@ class MenuItem(Base):
     is_vegetarian: Mapped[bool] = mapped_column(Boolean, default=False)
     is_spicy: Mapped[bool] = mapped_column(Boolean, default=False)
     available: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_special: Mapped[bool] = mapped_column(Boolean, default=False)
     cooking_method: Mapped[CookingMethod] = mapped_column(
         SAEnum(CookingMethod, name="cooking_method", create_constraint=True),
         nullable=False,

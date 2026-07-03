@@ -1,96 +1,182 @@
-# Food Ordering System
+# Varad's Kitchen - Project Notes
 
-Two roles (Admin, Customer), FastAPI backend, React+TypeScript frontend, AI-powered natural language menu search.
+Two roles: Admin and Customer. Backend is FastAPI. Frontend is React,
+TypeScript, Vite, React Router, axios, and Tailwind/CSS styling. The app is a
+guest-checkout food ordering system with AI-powered menu search.
 
-## Stack
+## Current Routes
 
-- Backend: FastAPI (async), SQLAlchemy 2.0, Pydantic v2, psycopg 3, postgresSQL (Supabase)
-- Frontend: React, Vite, Tailwind CSS v4, React Router, axios
-- AI search: DeepSeek LLM for query parsing and candidate ranking
-- Fonts: Sora (headings/prices) + DM Sans (body) loaded via Google Fonts
-
-## Color palette (Kitchen Bistro)
-
-- Page bg: `#F5F0EB` (warm stone)
-- Accent: `#D43B1F` (chili red — replaces Tailwind orange-500 throughout)
-- Text heading: `#1A1410` (deep warm brown)
-- Text body: `#5C4F42` (warm brown)
-- Borders: `#E5DDD3` (warm tan)
-- Admin surfaces use a denser variant: `#F7F5F3` header bg, `#E2DCD3` borders, `#7A6F62` muted text
+- Customer app: `/`
+- Legacy customer route: `/customer` redirects to `/`
+- Admin app: `/admin`
+- Unknown frontend routes render a small not-found screen with a link home
 
 ## Commands
 
-- Backend venv activate: `.venv/Scripts/activate` (Windows) or `source .venv/bin/activate` (Unix, from /backend)
-- Backend dev server: `.venv/Scripts/uvicorn app.main:app --reload` (Windows) or `uvicorn app.main:app --reload` (Unix, from /backend)
-- Backend tests: `pytest` (from /backend)
-- Alembic migrations: `alembic revision --autogenerate -m "msg"` and `alembic upgrade head` (from /backend)
-- Frontend dev server: `npm run dev` (from /frontend)
-- Frontend build: `npm run build` (from /frontend)
-- Seed admin: `.venv/Scripts/python -m app.seed_admin` (from /backend)
+- Backend venv activate: `.venv\Scripts\activate` from `backend`
+- Backend dev server: `.venv\Scripts\uvicorn app.main:app --reload` from `backend`
+- Alembic migrate: `alembic upgrade head` from `backend`
+- Seed admin: `.venv\Scripts\python -m app.seed_admin` from `backend`
+- Frontend dev server: `npm run dev` from `frontend`
+- Frontend build: `npm run build` from `frontend`
+- Frontend lint: `npm run lint` from `frontend`
+- Backend syntax check: `python -m compileall backend\app` from repo root
 
-## Data model (minimum entities — don't collapse these)
+## Data Model
 
-- User: id, name, email, password_hash, role (admin | customer)
-- MenuItem: id, name, description, price, category, available (bool), is_vegetarian, is_spicy, **cooking_method** (enum: none/fried/steamed/grilled/baked/roasted/boiled/raw), created_at, updated_at
-- Order: id, status, total_amount, created_at, updated_at (guest checkout — no customer_id FK)
-- OrderItem: id, order_id, menu_item_id, quantity, unit_price
+- User: `id`, `name`, `email`, `password_hash`, `role`, `created_at`
+- MenuItem: `id`, `name`, `description`, `category`, `price`,
+  `is_vegetarian`, `is_spicy`, `available`, `is_special`, `cooking_method`,
+  `embedding`, `deleted_at`, `created_at`, `updated_at`
+- Order: `id`, `status`, `total_amount`, `created_at`, `updated_at`
+- OrderItem: `id`, `order_id`, `menu_item_id`, `quantity`, `unit_price`
 
-## Domain decisions
+## Domain Decisions
 
-- **Order status only moves forward, one step at a time:**
-  Placed → Confirmed → Preparing → Ready → Picked Up.
-  No skipping steps, no going backward. Admin is the only role that can advance status. Return HTTP 400.
-- **Roles are Admin and Customer only.** Every admin-only route must check the role via a dependency.
-- Order ownership: not enforced — orders are guest-checkout by design.
-- Price snapshot: OrderItem.unit_price is copied from MenuItem.price at order-creation time and never recalculated. This is a real bug class, not a nice-to-have.
-- Soft delete only: menu items are never hard-deleted. Removing an item sets `deleted_at`. Hard-deleting breaks order history.
+- Customer checkout is guest checkout. There is no customer login requirement.
+- Admin login uses JWT. Admin endpoints must use role-protected dependencies.
+- No signup UI is exposed. `/api/auth/register` exists backend-side only.
+- `is_vegetarian=false` is displayed as Non-Veg in the frontend.
+- Menu removal is soft delete via `deleted_at`; do not hard-delete items.
+- `OrderItem.unit_price` is snapshotted at order creation and must not be
+  recalculated from current menu item prices.
+- Today's Specials are controlled with `is_special`; backend limits specials to
+  a small set in the special toggle route.
 
-## AI search design
+## Order Workflow
 
-The search pipeline has three stages:
+Forward only, one step at a time:
 
-1. **Query parsing** — DeepSeek LLM (fallback: regex) parses the query into:
-   - `max_price` / `min_price` — integer or null
-   - `is_vegetarian` / `is_spicy` — bool or null
-   - `cooking_method_include` / `cooking_method_exclude` — list of strings
-   - `semantic_description` — remaining fuzzy intent (e.g. "light lunch")
+```text
+placed -> confirmed -> preparing -> ready -> picked_up
+```
 
-2. **Deterministic hard filters** (SQL):
-   - Price filters (`price <= max_price`, `price >= min_price`)
-   - Vegetarian / spicy boolean columns
-   - Cooking method: `IN (include)` or `NOT IN (exclude)` against the `cooking_method` enum column
-   - Cascade relaxation: price → veg/spicy/cooking_method → all (same order, dropped one at a time when zero results)
+Admins can advance status through `/api/admin/orders/{order_id}/status`.
+Skipping steps or moving backward should return HTTP 400.
 
-3. **LLM-based fuzzy ranking** (`app/services/llm_rank.py`):
-   - Candidates capped at 30 items to control token usage
-   - Single item short-circuits (no LLM call needed)
-   - LLM prompt: "Given the user's search intent: '{semantic_description}' (original query: '{query}'), rank these items..."
-   - Returns `[{id, score: 0-1}]` sorted by relevance
-   - On parse/API failure: returns candidates unranked with `score=None` — never fails the request
+## AI Search
 
-See `app/routers/search.py` for the pipeline and `app/services/llm_rank.py` for the ranking call.
+Endpoint: `POST /api/menu/search`
 
-## Auth
+Search pipeline:
 
-- Login endpoint issues a JWT for both roles.
-- One seeded admin account — no admin self-registration.
-- Simple customer signup: email + password (hashed with passlib/bcrypt).
-- No email verification, no password reset flow, no OAuth — out of scope.
-- Role comes from the JWT claim, checked via a FastAPI dependency.
+1. `app.services.query_parser.parse_query`
+   - DeepSeek parser first when `DEEPSEEK_API_KEY` exists
+   - Keyword fallback when the LLM is unavailable
+2. Hard SQL filters in `app.routers.search`
+   - `available == true`
+   - `deleted_at IS NULL`
+   - `price <= max_price`
+   - `price >= min_price`
+   - `is_vegetarian`
+   - `is_spicy`
+   - `cooking_method` include/exclude
+   - optional `category_hint`
+3. Cascade relaxation if zero results
+   - category
+   - cooking method
+   - price
+   - veg/spicy
+   - full available menu fallback
+4. `app.services.llm_rank.rank_candidates`
+   - ranks up to 30 candidates
+   - returns top results above score threshold
+   - falls back to unranked filtered results if LLM ranking fails
 
-## Code style
+Parser fields:
 
-- Pydantic schemas are separate from SQLAlchemy models.
-- Every route returns a proper HTTP status code.
-- Admin-only endpoints check role via a dependency, not inline if-checks.
-- Frontend: React Router with `/admin` and `/customer` (redirects `/` to `/customer`).
-- Customer views use the Kitchen Bistro palette; Admin uses a denser back-office variant.
-- API route prefixes: `/api/auth/`, `/api/menu/`, `/api/admin/`, `/api/orders/`.
-- CORS configured for `http://localhost:5173`.
+- `max_price`
+- `min_price`
+- `is_vegetarian`
+- `is_spicy`
+- `cooking_method_include`
+- `cooking_method_exclude`
+- `category_hint`
+- `semantic_description`
 
-## Workflow
+Examples that should parse:
 
-- Run `pytest` after any model, schema, or route change before moving to the next feature.
-- Batch full vertical slices (model + schema + route + test) rather than one file at a time.
-- Don't install a new dependency for something the standard library or native browser feature covers.
-- If a design decision changes, update this file.
+- `veg above 200`
+- `spicy vegetarian starter under 200`
+- `a light lunch not fried`
+- `something sweet`
+- `hot beverage`
+
+After changing search/parser code, restart the backend server.
+
+## API Surface
+
+Auth:
+
+- `POST /api/auth/register` - backend-only customer registration
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+
+Customer menu:
+
+- `GET /api/menu`
+- `GET /api/menu/categories`
+- `GET /api/menu/specials`
+- `GET /api/menu/{item_id}`
+- `POST /api/menu/search`
+
+Admin menu:
+
+- `GET /api/admin/menu-items`
+- `POST /api/admin/menu-items`
+- `GET /api/admin/menu-items/{item_id}`
+- `PUT /api/admin/menu-items/{item_id}`
+- `PATCH /api/admin/menu-items/{item_id}/availability`
+- `PATCH /api/admin/menu-items/{item_id}/special`
+- `DELETE /api/admin/menu-items/{item_id}`
+
+Orders:
+
+- `POST /api/orders`
+- `GET /api/orders/{order_id}`
+- `GET /api/admin/orders`
+- `PATCH /api/admin/orders/{order_id}/status`
+
+Dashboard:
+
+- `GET /api/admin/dashboard`
+
+Health:
+
+- `GET /api/health`
+
+## Frontend Notes
+
+- `AuthContext` stores `admin_token` and `apiClient` attaches it as a bearer
+  token.
+- `CartContext` owns cart quantities and total calculation.
+- `ToastContext` is used for user feedback.
+- `MenuBrowser` includes category browsing and today's specials.
+- `AISearchBar` calls `/api/menu/search`.
+- `ChatBot` is a customer-facing floating search assistant.
+- `MenuManagement` handles admin CRUD, availability, and special toggles.
+- Prices from the API may be strings because they are decimals; parse before
+  calling `toFixed`.
+
+## Style Notes
+
+- Brand: Varad's Kitchen.
+- Palette: warm stone background, chili red accent, deep warm text.
+- Keep admin screens denser and more operational than customer screens.
+- Avoid broad refactors when making integration fixes.
+
+## Verification
+
+Run after meaningful frontend changes:
+
+```bash
+cd frontend
+npm run build
+npm run lint
+```
+
+Run after backend route/model/parser changes:
+
+```bash
+python -m compileall backend\app
+```

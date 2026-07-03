@@ -140,7 +140,7 @@ export default function Customer() {
       {/* Cart drawer */}
       <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
 
-      {/* AI ChatBot — floating bottom-right */}
+      {/* AI ChatBot - floating bottom-right */}
       <ChatBot />
     </div>
   );

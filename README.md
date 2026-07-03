@@ -1,124 +1,54 @@
 # Varad's Kitchen - Food Ordering System
 
-A full-stack restaurant ordering platform with two user roles (admin, customer) and an AI-powered natural-language menu search. Customers browse a menu, search in plain English ("a light lunch that isn't fried"), build a cart, and place orders without requiring an account. Admins manage menu items, monitor orders through a 5-stage workflow (Placed → Confirmed → Preparing → Ready → Picked Up), and view aggregated dashboard metrics. The search pipeline uses DeepSeek LLM for both structured query parsing and fuzzy ranking, but degrades gracefully to a regex parser + unranked results when the LLM is unavailable.
+A full-stack restaurant ordering app with a FastAPI backend and React frontend.
+Customers can browse the menu, search in natural language, view item details,
+manage a cart, place guest orders, and track order status. Admins can sign in,
+manage menu items, monitor orders, advance order status, and view dashboard
+metrics.
 
----
+## Current Features
 
-## Architecture
+- Customer menu browsing at `/`
+- Legacy `/customer` route redirects to `/`
+- Admin panel at `/admin`
+- Admin JWT login
+- Menu item CRUD with soft delete
+- Menu availability toggle
+- Today's Specials toggle and customer specials strip
+- Cart with quantities and total calculation
+- Guest order placement
+- Order tracking by order ID
+- Admin order list and status updates
+- Dashboard with today's revenue, orders by status, and popular items
+- AI-powered natural-language search
+- Floating customer chat/search assistant
 
-```
-┌─────────────────┐      ┌─────────────────────────────────────┐      ┌──────────────┐
-│   React 19      │      │         FastAPI (Python)             │      │  PostgreSQL  │
-│   Vite + TS     │      │                                      │      │  (Supabase)  │
-│   Tailwind v4   │      │  ┌──────────┐   ┌────────────────┐   │      │              │
-│                 │ HTTP  │  │ Routers  │──▶│  SQLAlchemy    │───┼─────▶│  users       │
-│  /customer  ────┼──────┼──┼──────────┤   │  ORM + Filters │   │      │  menu_items  │
-│  /admin     ────┼──────┼──│ (auth,   │   └────────────────┘   │      │  orders      │
-│                 │      │  │  menu,   │         │              │      │  order_items │
-│  CartProvider   │      │  │  orders, │    ┌────▼───────────┐  │      └──────────────┘
-│  AuthProvider   │      │  │  search, │    │  LLM Ranking   │  │
-│  ToastProvider  │      │  │  dashbrd)│    │  (app/services  │  │
-│                 │      │  └──────────┘    │   /llm_rank.py) │  │
-└─────────────────┘      │                   └────┬───────────┘  │
-                         │                        │              │
-                         │              ┌─────────▼──────────┐   │
-                         │              │  DeepSeek Chat API  │   │
-                         │              │  (OpenAI-compatible)│   │
-                         │              └────────────────────┘   │
-                         └─────────────────────────────────────┘
-```
+## Stack
 
-### Search pipeline detail
+- Backend: FastAPI, SQLAlchemy 2.0, Pydantic v2, Alembic, PostgreSQL
+- Frontend: React, TypeScript, Vite, React Router, axios, Tailwind/CSS styling
+- AI: DeepSeek via OpenAI-compatible client, with keyword fallback
 
-```
-User query ("light lunch not fried")
-        │
-        ▼
-┌───────────────────────────────┐
-│  1. LLM structured parsing    │  ← DeepSeek extracts:
-│     (_llm_parse_query)        │     {max_price, is_vegetarian, is_spicy,
-│                               │      cooking_method_include/exclude,
-│                               │      semantic_description}
-└───────────┬───────────────────┘
-            │ (falls back to regex keyword parser if LLM unavailable)
-            ▼
-┌───────────────────────────────┐
-│  2. Deterministic SQL filters │  ← price, vegetarian/spicy booleans,
-│     (hard constraints)        │     cooking_method IN/NOT IN
-└───────────┬───────────────────┘
-            │ (cascade relax: price → veg/spicy/cooking → all if zero results)
-            ▼
-┌───────────────────────────────┐
-│  3. LLM fuzzy ranking         │  ← DeepSeek ranks remaining shortlist
-│     (rank_candidates)         │     against semantic_description
-└───────────┬───────────────────┘
-            │ (falls back to unranked list if LLM unavailable)
-            ▼
-      Ranked results returned to client
-```
+## Routes
 
----
+Frontend:
 
-## Database Schema
+- `/` - Customer app
+- `/customer` - Redirects to `/`
+- `/admin` - Admin app
 
-### `users`
+Backend:
 
-| Column        | Type         | Notes                  |
-| ------------- | ------------ | ---------------------- |
-| id            | integer PK   | auto-increment         |
-| name          | varchar(255) | display name           |
-| email         | varchar(255) | unique, used for login |
-| password_hash | varchar(255) | bcrypt via passlib     |
-| role          | enum         | `admin` or `customer`  |
-| created_at    | timestamptz  | server default `now()` |
-
-### `menu_items`
-
-| Column                  | Type          | Notes                                                                      |
-| ----------------------- | ------------- | -------------------------------------------------------------------------- |
-| id                      | integer PK    | auto-increment                                                             |
-| name                    | varchar(255)  |                                                                            |
-| description             | text          | nullable                                                                   |
-| category                | varchar(100)  | e.g. "Main Course", "Starters"                                             |
-| price                   | numeric(10,2) | CHECK >= 0                                                                 |
-| is_vegetarian           | boolean       | default false                                                              |
-| is_spicy                | boolean       | default false                                                              |
-| available               | boolean       | default true; soft-disable                                                 |
-| **cooking_method**      | enum          | `none`, `fried`, `steamed`, `grilled`, `baked`, `roasted`, `boiled`, `raw` |
-| deleted_at              | timestamptz   | nullable — soft delete marker                                              |
-| created_at / updated_at | timestamptz   | server defaults                                                            |
-
-### `orders`
-
-| Column                  | Type          | Notes                                                                       |
-| ----------------------- | ------------- | --------------------------------------------------------------------------- |
-| id                      | integer PK    | auto-increment                                                              |
-| status                  | enum          | `placed` → `confirmed` → `preparing` → `ready` → `picked_up` (forward only) |
-| total_amount            | numeric(10,2) | sum of line items at order time                                             |
-| created_at / updated_at | timestamptz   |                                                                             |
-
-No `customer_id` FK — guest checkout by design (frictionless like most food delivery apps).
-
-### `order_items`
-
-| Column       | Type                       | Notes                                                               |
-| ------------ | -------------------------- | ------------------------------------------------------------------- |
-| id           | integer PK                 |                                                                     |
-| order_id     | integer FK → orders.id     |                                                                     |
-| menu_item_id | integer FK → menu_items.id |                                                                     |
-| quantity     | integer                    | > 0                                                                 |
-| unit_price   | numeric(10,2)              | **snapshotted** at creation — not recalculated from live menu price |
-
----
+- `/api/health`
+- `/api/auth/*`
+- `/api/menu/*`
+- `/api/menu/search`
+- `/api/orders/*`
+- `/api/admin/menu-items/*`
+- `/api/admin/orders/*`
+- `/api/admin/dashboard`
 
 ## Setup
-
-### Prerequisites
-
-- Python 3.11+
-- Node.js 20+
-- A Supabase (PostgreSQL) project
-- A DeepSeek API key (or any OpenAI-compatible endpoint)
 
 ### Backend
 
@@ -128,139 +58,247 @@ python -m venv .venv
 
 # Windows
 .venv\Scripts\activate
-# Unix
+
+# macOS/Linux
 source .venv/bin/activate
 
 pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-# Edit .env with your Supabase URL, DeepSeek key, JWT secret, admin credentials
-
-# Run migrations
 alembic upgrade head
-
-# Seed the admin user
-python -m app.seed_admin
-
-# Start dev server
-uvicorn app.main:app --reload   # → http://localhost:8000
+uvicorn app.main:app --reload
 ```
+
+The API runs at `http://localhost:8000`.
 
 ### Frontend
 
 ```bash
 cd frontend
-cp .env.example .env
 npm install
-npm run dev                     # → http://localhost:5173
+npm run dev
 ```
 
-**Verify:** `curl http://localhost:8000/api/health` → `{"status":"ok"}`
-
----
+The frontend runs at `http://localhost:5173`.
 
 ## Environment Variables
 
-| Variable            | Required | Default                       | Description                                                                                 |
-| ------------------- | -------- | ----------------------------- | ------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`      | Yes      | —                             | Supabase pooler connection string (`postgresql://user:pass@host:6543/db`)                   |
-| `JWT_SECRET`        | Yes      | —                             | Secret key for signing JWT tokens (change in production)                                    |
-| `DEEPSEEK_API_KEY`  | No       | —                             | DeepSeek/OpenAI-compatible API key. If unset, search uses keyword parser + unranked results |
-| `DEEPSEEK_BASE_URL` | No       | `https://api.deepseek.com/v1` | Allows swapping to a different OpenAI-compatible endpoint                                   |
-| `ADMIN_EMAIL`       | No       | —                             | Email for the seeded admin account                                                          |
-| `ADMIN_PASSWORD`    | No       | —                             | Password for the seeded admin account                                                       |
-| `VITE_API_URL`      | No       | `http://localhost:8000`       | Frontend API base URL (Vite env var)                                                        |
+Backend `.env`:
 
----
+```env
+DATABASE_URL=postgresql://...
+JWT_SECRET=change-me
+
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=admin123
+ADMIN_NAME=Admin
+
+DEEPSEEK_API_KEY=
+DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
+```
+
+Frontend `.env`:
+
+```env
+VITE_API_URL=http://localhost:8000
+```
+
+`DEEPSEEK_API_KEY` is optional. If it is missing, search still works through the
+keyword fallback parser, but ranking is less smart.
+
+## Create Admin User
+
+After migrations are applied:
+
+```powershell
+cd backend
+
+$env:ADMIN_EMAIL="admin@example.com"
+$env:ADMIN_PASSWORD="admin123"
+$env:ADMIN_NAME="Admin"
+
+python -m app.seed_admin
+```
+
+Then log in at `http://localhost:5173/admin`.
+
+## Data Model
+
+### User
+
+- `id`
+- `name`
+- `email`
+- `password_hash`
+- `role`: `admin` or `customer`
+- `created_at`
+
+### MenuItem
+
+- `id`
+- `name`
+- `description`
+- `category`
+- `price`
+- `is_vegetarian`
+- `is_spicy`
+- `available`
+- `is_special`
+- `cooking_method`
+- `embedding`
+- `deleted_at`
+- `created_at`
+- `updated_at`
+
+Dietary tags are stored as booleans. The frontend displays `Non-Veg` when
+`is_vegetarian` is `false`.
+
+### Order
+
+- `id`
+- `status`
+- `total_amount`
+- `created_at`
+- `updated_at`
+
+Orders are guest checkout. There is no customer ownership requirement.
+
+### OrderItem
+
+- `id`
+- `order_id`
+- `menu_item_id`
+- `quantity`
+- `unit_price`
+
+`unit_price` is snapshotted when the order is placed, so later menu price edits
+do not change historical order totals.
 
 ## API Overview
 
-All endpoints return JSON. Auth-protected endpoints accept `Authorization: Bearer <token>`.
-
 ### Auth
 
-| Method | Path                 | Auth | Description                          |
-| ------ | -------------------- | ---- | ------------------------------------ |
-| POST   | `/api/auth/register` | No   | Create a customer account            |
-| POST   | `/api/auth/login`    | No   | Returns `{access_token, token_type}` |
-| GET    | `/api/auth/me`       | JWT  | Current user info                    |
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| POST | `/api/auth/register` | No | Backend-only customer registration endpoint; no signup UI |
+| POST | `/api/auth/login` | No | Returns JWT access token |
+| GET | `/api/auth/me` | JWT | Current user |
 
-### Menu (customer)
+### Customer Menu
 
-| Method | Path                   | Auth | Description                  |
-| ------ | ---------------------- | ---- | ---------------------------- |
-| GET    | `/api/menu`            | No   | Available, non-deleted items |
-| GET    | `/api/menu/{id}`       | No   | Single item detail           |
-| GET    | `/api/menu/categories` | No   | Distinct category list       |
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET | `/api/menu` | No | Available, non-deleted menu items |
+| GET | `/api/menu/categories` | No | Distinct available categories |
+| GET | `/api/menu/specials` | No | Available items marked as today's special |
+| GET | `/api/menu/{item_id}` | No | Available item detail |
 
-### Menu (admin)
+### Admin Menu
 
-| Method | Path                                      | Auth  | Description                     |
-| ------ | ----------------------------------------- | ----- | ------------------------------- |
-| POST   | `/api/admin/menu-items`                   | Admin | Create item                     |
-| GET    | `/api/admin/menu-items`                   | Admin | List all items (incl. deleted)  |
-| GET    | `/api/admin/menu-items/{id}`              | Admin | Single item                     |
-| PUT    | `/api/admin/menu-items/{id}`              | Admin | Update item                     |
-| PATCH  | `/api/admin/menu-items/{id}/availability` | Admin | Toggle `available`              |
-| DELETE | `/api/admin/menu-items/{id}`              | Admin | Soft delete (sets `deleted_at`) |
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET | `/api/admin/menu-items` | Admin | List non-deleted menu items |
+| POST | `/api/admin/menu-items` | Admin | Create menu item |
+| GET | `/api/admin/menu-items/{item_id}` | Admin | Single item, including unavailable/soft-deleted |
+| PUT | `/api/admin/menu-items/{item_id}` | Admin | Update menu item |
+| PATCH | `/api/admin/menu-items/{item_id}/availability` | Admin | Toggle availability |
+| PATCH | `/api/admin/menu-items/{item_id}/special` | Admin | Toggle today's special |
+| DELETE | `/api/admin/menu-items/{item_id}` | Admin | Soft delete |
 
 ### Orders
 
-| Method | Path                            | Auth  | Description                              |
-| ------ | ------------------------------- | ----- | ---------------------------------------- |
-| POST   | `/api/orders`                   | No    | Place order (guest checkout)             |
-| GET    | `/api/orders/{id}`              | No    | Order status & items                     |
-| GET    | `/api/admin/orders`             | Admin | List orders (optional `?status=` filter) |
-| PATCH  | `/api/admin/orders/{id}/status` | Admin | Advance status (one step forward only)   |
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| POST | `/api/orders` | No | Place guest order |
+| GET | `/api/orders/{order_id}` | No | Track order |
+| GET | `/api/admin/orders` | Admin | List orders, optional `?status=` |
+| PATCH | `/api/admin/orders/{order_id}/status` | Admin | Advance status one step |
 
 ### Search
 
-| Method | Path               | Auth | Description                                                      |
-| ------ | ------------------ | ---- | ---------------------------------------------------------------- |
-| POST   | `/api/menu/search` | No   | Natural-language menu search                                     |
-|        |                    |      | Body: `{"query": "a light lunch not fried"}`                     |
-|        |                    |      | Returns ranked items with `score` (0–1) + `relaxed_filters` flag |
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| POST | `/api/menu/search` | No | Natural-language smart search |
+
+Body:
+
+```json
+{
+  "query": "veg above 200"
+}
+```
+
+Search returns up to 15 available items, each with an optional relevance score.
 
 ### Dashboard
 
-| Method | Path                   | Auth  | Description                                             |
-| ------ | ---------------------- | ----- | ------------------------------------------------------- |
-| GET    | `/api/admin/dashboard` | Admin | Today's revenue, orders-by-status counts, popular items |
+| Method | Path | Auth | Notes |
+| --- | --- | --- | --- |
+| GET | `/api/admin/dashboard` | Admin | Today's revenue, orders by status, popular items |
 
----
+## AI Search Behavior
 
-## AI Search Design
+The search endpoint uses a staged pipeline:
 
-The search endpoint uses a **three-stage pipeline** that separates deterministic filtering from fuzzy relevance:
+1. Parse the natural-language query.
+   - DeepSeek is used first when `DEEPSEEK_API_KEY` is configured.
+   - If unavailable, the regex/keyword parser is used.
+2. Extract structured filters:
+   - `max_price`
+   - `min_price`
+   - `is_vegetarian`
+   - `is_spicy`
+   - `cooking_method_include`
+   - `cooking_method_exclude`
+   - `category_hint`
+   - `semantic_description`
+3. Apply deterministic SQL filters.
+   - Only `available = true` and `deleted_at IS NULL` items are considered.
+   - Price supports both "under 200" and "above 200" style queries.
+4. Relax filters if no exact matches are found.
+5. Rank shortlisted candidates with DeepSeek.
+   - If ranking is unavailable, the endpoint returns filtered candidates unranked.
 
-1. **LLM structured extraction** — The user's raw query is sent to DeepSeek (chat completion, temperature 0) with a prompt that asks it to return typed JSON: `{max_price, is_vegetarian, is_spicy, cooking_method_include, cooking_method_exclude, semantic_description}`. This gives us precise control over hard filters (price range, dietary preference, cooking method) while isolating the vague/intent part ("light", "healthy", "hearty") into a separate field for the next stage.
+Examples:
 
-2. **Deterministic SQL filters** — The structured fields become SQL WHERE clauses on indexed columns. If a filter returns zero results, the system relaxes one constraint at a time (price → dietary → cooking method → all items) so the user always sees something useful rather than a blank page. This stage is pure SQL — no AI, no ambiguity.
+- `spicy vegetarian starter under 200`
+- `veg above 200`
+- `a light lunch not fried`
+- `something sweet`
+- `hot beverage`
 
-3. **LLM candidate ranking** — The remaining shortlist (capped at 30 items) is sent back to DeepSeek with the original query and the semantic description, asking it to rank by relevance. Items judged irrelevant by the LLM are discarded. If the LLM call fails or the API key is unset, the endpoint returns the filtered list unranked — it never crashes.
+## Order Workflow
 
-This design was chosen over a pure-vector-search or general-chatbot approach for three reasons:
+Order status moves forward only:
 
-- **Explainability** — Each search result can be traced back to a specific decision (LLM said "this is lunch food" → category match → score boost). There is no black-box embedding where neither the system nor the user knows why item X ranked higher than Y.
-- **Cost & latency** — Two small LLM calls (parse + rank) at temperature 0 consume roughly 400–800 tokens per search. A naive chatbot that "just answers the question" would consume 5–10× the tokens and be harder to constrain to the actual menu data.
-- **Demo reliability** — The regex keyword fallback means the entire search pipeline works with zero external dependencies. The LLM is an enhancement that makes results smarter, not a gate that makes them stop working.
+```text
+placed -> confirmed -> preparing -> ready -> picked_up
+```
 
----
+Admins can advance one step at a time. Skipping or moving backward returns
+`400 Bad Request`.
 
-## Demo Credentials
+## Admin Menu Import
 
-| Role     | Email                                                          | Password   |
-| -------- | -------------------------------------------------------------- | ---------- |
-| Admin    | `admin@foodorder.com`                                          | `admin123` |
-| Customer | Register via `/api/auth/register` or the frontend sign-up form | —          |
+There is no bulk-create endpoint. To add many items, log in once and loop over
+`POST /api/admin/menu-items` with the admin bearer token.
 
----
+## Verification Commands
 
-## Known Limitations & Future Improvements
+```bash
+# frontend
+cd frontend
+npm run build
+npm run lint
 
-- **No order ownership** — Orders are guest-checkout by design (no customer_id FK). This keeps friction low but means there is no "my orders" page without an account. A future feature could link orders to authenticated customers via a JWT-scoped query.
-- **No embedding-based search** — For a small menu (<100 items), the LLM ranking approach is fast and cheap. A larger catalogue (>500 items) would benefit from pre-computed embeddings (pgvector) so the ranking stage receives fewer candidates. The `Vector(384)` column already exists on `menu_items` but is not yet populated.
-- **No rate limiting** — The `/api/menu/search` endpoint calls an external LLM on every request. A production deployment should add per-IP rate limiting (or token-bucket) to prevent abuse that would run up the DeepSeek bill.
-- **Cooking method enum is static** — The `CookingMethod` enum is defined in Python and requires a migration to add new values. A future version could store cooking methods as a separate table with admin-configurable options.
-- **No email verification or password reset** — Customer accounts are created with just an email + password. Production-ready auth would need email confirmation and a reset flow.
+# backend syntax smoke check
+cd ..
+python -m compileall backend\app
+```
+
+## Notes
+
+- No customer login is required.
+- No signup UI is exposed.
+- `/api/auth/register` remains available in the backend but is intentionally not
+  part of the current frontend flow.
+- Menu deletes are soft deletes to preserve order history.
+- Restart the backend after changing search/parser code.

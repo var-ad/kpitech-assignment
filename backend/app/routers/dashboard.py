@@ -32,7 +32,7 @@ async def get_dashboard(
         StatusCount(status=row[0].value, count=row[1]) for row in status_rows
     ]
 
-    # 2. Today's revenue — use date_trunc for consistent day boundary comparison
+    # 2. Today's revenue - use date_trunc for consistent day boundary comparison
     todays_revenue = (
         db.query(func.coalesce(func.sum(Order.total_amount), 0))
         .filter(
